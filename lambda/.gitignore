@@ -1,0 +1,8 @@
+
+*.zip
+
+certifi*/
+charset*/
+idna*/
+requests*/
+urllib3*/

@@ -1,0 +1,167 @@
+services:
+  traefik:
+    image: "traefik:v3.0"
+    container_name: "traefik"
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - proxy
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+      - "./traefiklog:/var/log"
+    command:
+      - "--log.level=DEBUG"
+      - "--log.format=common"
+      - "--log.filePath=/var/log/traefik/traefik.log"
+      - "--accesslog=true"
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--providers.docker.watch"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.buckets=0.1,0.3,1.2,5.0"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entryPoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.http.tls.certresolver=staging"
+      - "--certificatesresolvers.staging.acme.email=$EMAIL"
+      - "--certificatesresolvers.staging.acme.tlschallenge=true"
+      - "--certificatesresolvers.staging.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.staging.acme.caServer=$CA_SERVER"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`$TRAEFIK_URL`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=uiauth"
+      - "traefik.http.middlewares.uiauth.basicauth.users=${traefik_admin}"
+      - "traefik.http.middlewares.uiauth.basicauth.removeheader=true"
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  init_prometheus:
+    image: prom/prometheus
+    container_name: "init_prometheus"
+    user: root
+    init: true
+    restart: "no"
+    entrypoint:
+        - /bin/sh
+        - -c
+        - chown -R 65534:65534 /var/lib/prometheus
+    volumes:
+      - "./prometheus-data:/var/lib/prometheus"
+
+  prometheus:
+    image: prom/prometheus
+    container_name: "prometheus"
+    volumes:
+      - "./prometheus/:/etc/prometheus/"
+      - "./prometheus-data:/var/lib/prometheus"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/var/lib/prometheus'
+      - '--storage.tsdb.retention.size=256MB'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`$PROMETHEUS_URL`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls.certresolver=staging"
+      - "traefik.http.routers.prometheus.middlewares=uiauth"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    depends_on:
+      - init_prometheus
+    networks:
+      - proxy
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  init_grafana:
+    image: grafana/grafana
+    container_name: "init_grafana"
+    user: root
+    init: true
+    restart: "no"
+    entrypoint:
+        - /bin/sh
+        - -c
+        - chown -R 472:472 /var/lib/grafana
+    volumes:
+      - "./grafana-data:/var/lib/grafana"
+
+  grafana:
+    image: grafana/grafana
+    container_name: "grafana"
+    depends_on:
+      - prometheus
+      - init_grafana
+    volumes:
+      - "./grafana-data:/var/lib/grafana"
+      - "./grafana/provisioning/:/etc/grafana/provisioning/"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${grafana_admin_password}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`$GRAFANA_URL`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=staging"
+      - "traefik.http.routers.grafana.middlewares=uiauth"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    networks:
+      - proxy
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  whoami1:
+    # Original image: "traefik/whoami"
+    image: "andrelapin/whoami"
+    container_name: "whoami1"
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`$BASE_DOMAIN`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+      - "traefik.http.routers.whoami.tls.certresolver=staging"
+
+  whoami2:
+    image: "traefik/whoami"
+    container_name: "whoami2"
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`$BASE_DOMAIN`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+      - "traefik.http.routers.whoami.tls.certresolver=staging"
+
+  whoami3:
+    image: "traefik/whoami"
+    container_name: "whoami3"
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`$BASE_DOMAIN`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+      - "traefik.http.routers.whoami.tls.certresolver=staging"
+
+networks:
+  proxy:
+    name: proxy
