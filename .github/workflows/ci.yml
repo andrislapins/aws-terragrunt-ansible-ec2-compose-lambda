@@ -38,19 +38,19 @@ jobs:
       
       # Install golangci-lint
       - name: Check and get dependencies
-        working-directory: ./app/src
+        working-directory: ./app
         run: |
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin ${GOLANGCI_LINT_VERSION}
           golangci-lint --version
 
       # Run linters, tests and build
       - name: Run linters, tests and build
-        working-directory: ./app/src
+        working-directory: ./app
         run: make check test
 
       # Run build
       - name: Run build
-        working-directory: ./app/src
+        working-directory: ./app
         run: make build
 
       - name: Get current time
@@ -65,7 +65,7 @@ jobs:
       
       # Create the image
       - name: Make Image
-        working-directory: ./app/src
+        working-directory: ./app
         run: make image IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.current-time.outputs.current-time }}-${{ steps.sha.outputs.sha_short }}"
 
       # Have access to provide Docker hub
