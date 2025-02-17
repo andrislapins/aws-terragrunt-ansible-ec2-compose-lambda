@@ -20,7 +20,7 @@ jobs:
       GO_VERSION: stable
       GOLANGCI_LINT_version: v1.58.0
       CGO_ENABLED: 0
-      IMAGE_NAME: andrelapin/whoami
+      IMAGE_NAME: whoami
 
     steps:
 
@@ -38,25 +38,35 @@ jobs:
       
       # Install golangci-lint
       - name: Check and get dependencies
-        working-directory: ./app
+        working-directory: ./app/src
         run: |
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin ${GOLANGCI_LINT_VERSION}
           golangci-lint --version
 
       # Run linters, tests and build
       - name: Run linters, tests and build
-        working-directory: ./app
+        working-directory: ./app/src
         run: make check test
 
       # Run build
       - name: Run build
-        working-directory: ./app
+        working-directory: ./app/src
         run: make build
+
+      - name: Get current time
+        uses: josStorer/get-current-time@v2
+        id: current-time
+        with:
+          format: YYYY-MM-DD-HH
+
+      - name: publish - Set outputs
+        id: sha
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       
       # Create the image
       - name: Make Image
-        working-directory: ./app
-        run: make image IMAGE_NAME=${{ env.IMAGE_NAME }}
+        working-directory: ./app/src
+        run: make image IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.current-time.outputs.current-time }}-${{ steps.sha.outputs.sha_short }}"
 
       # Have access to provide Docker hub
       - name: dockerhub-login
@@ -67,5 +77,4 @@ jobs:
 
       # Push Docker image to Docker Hub
       - name: Push Docker image to Docker Hub
-        working-directory: ./app
-        run: docker push ${{ env.IMAGE_NAME }}
+        run: docker push "${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.current-time.outputs.current-time }}-${{ steps.sha.outputs.sha_short }}"
