@@ -59,7 +59,7 @@ jobs:
         with:
           format: YYYY-MM-DD-HH
 
-      - name: publish - Set outputs
+      - name: Get commit short sha
         id: sha
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       
